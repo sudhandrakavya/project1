@@ -1,0 +1,2 @@
+DC,VM,Cluster,Host,Network adapter 1,Network adapter 2,Network adapter 3,Network adapter 4,Network adapter 5,Network adapter 6,Network adapter 7,Network adapter 8,Network adapter 9,Network adapter 10
+mcts-vc-a-dc,SK-01,nsx-t-cluster,10.10.11.10,vm-mgmt,,,,,,,,,
