@@ -17,6 +17,13 @@ from argparse import ArgumentParser
 
 def connectvSphere():
  logging.debug(namespace.jobname + " Request Received to connect vSphere.")
+ if namespace.password is None:
+  print("enter the vSphere password")
+  vSphere_password = getpass()
+ else:
+  print("password argument passed")
+  vSphere_password = namespace.password
+  
  if int(namespace.ssl_verify) == 0:
   disableSSL=True
  try:
