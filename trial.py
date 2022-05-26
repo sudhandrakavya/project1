@@ -9,7 +9,7 @@ import csv
 import atexit
 from pyVim import connect
 from pyVmomi import vim, vmodl
-
+#new comment
 from logging.handlers import RotatingFileHandler
 from argparse import ArgumentParser
 
