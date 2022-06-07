@@ -9,31 +9,48 @@ import csv
 import atexit
 from pyVim import connect
 from pyVmomi import vim, vmodl
-#new comment
+
 from logging.handlers import RotatingFileHandler
 from argparse import ArgumentParser
 
 ##### logint to vSphere #####
+import hashlib
+from hashlib import md5
+from getpass import getpass
+
+pwd = "8d6fb6121b3c9c29f1beb3a6d2e1cf66"
+
+def checkPassword():
+    p = getpass(prompt='PIN:')
+    if (hashlib.md5(p.encode()).hexdigest() == pwd):
+      print("PIN Authentication Success")
+    else:
+      print("PIN Authentication Failed")
+      exit()
+
+checkPassword()
 
 def connectvSphere():
  logging.debug(namespace.jobname + " Request Received to connect vSphere.")
  if namespace.password is None:
-  print("enter the vSphere password")
+  print("Enter the vSphere Password")
   vSphere_password = getpass()
  else:
-  print("password argument passed")
+  print("Password argument passed")
   vSphere_password = namespace.password
-  
+ 
  if int(namespace.ssl_verify) == 0:
   disableSSL=True
  try:
   service_instance = connect.SmartConnect(host=namespace.vSpherehost,
            user=namespace.vSphereuser,
-           pwd=namespace.password,
+           pwd=vSphere_password,
            port=namespace.port, disableSslCertValidation=disableSSL)
   atexit.register(connect.Disconnect, service_instance)
   content = service_instance.RetrieveContent()
+  print("vSphere Authentication Success")
  except Exception as e:
+  print("vSphere Authentication Failed")
   logging.critical(namespace.jobname + " Unable to connect vSphere. Exception : " + str(e))
   service_instance = False
   
@@ -130,6 +147,7 @@ def write_to_csv(vSpheredata,vSphereheaders):
     fc = csv.DictWriter(output_file,fieldnames=vSphereheaders.keys(),)
     fc.writeheader()
     fc.writerows(vSpheredata)
+    print("file exported successfully")
  except Exception as e:
   logging.critical(namespace.jobname + " Unable to write data to output file, Export Failed. Exception : " + str(e))
   exit()
@@ -447,7 +465,9 @@ def migrate_vm(vSphereObjJson,importData):
    try:
     vmObj.RelocateVM_Task(spec=relocSpec, priority=vim.VirtualMachine.MovePriority.highPriority)
     logging.info("VM : " + str(vmObj.name) + ", Migrated Successfully.")
+    print("VM : " + str(vmObj.name) + ", Migrated Successfully.")
    except Exception as e:
+    print("Migration failed for the VM : " + str(vmObj.name) + ", Exception : " + str(e))
     logging.critical("Migration failed for the VM : " + str(vmObj.name) + ", Exception : " + str(e))
 
   elif namespace.type.upper() == 'RECONFIG':
@@ -455,8 +475,10 @@ def migrate_vm(vSphereObjJson,importData):
    logging.info("Initiating network change for VM : " + str(vmObj.name))
    try:
     vmObj.ReconfigVM_Task(spec=reConfigSpec)
-    logging.info("VM : " + str(vmObj.name) + ", Network reconfigure Successfully.")
+    logging.info("VM : " + str(vmObj.name) + ", Network reconfigured Successfully.")
+    print("VM : " + str(vmObj.name) + ", Network reconfigured Successfully.")
    except Exception as e:
+    print("Reconfigure failed for the VM : " + str(vmObj.name) + ", Exception : " + str(e))
     logging.critical("Reconfigure failed for the VM : " + str(vmObj.name) + ", Exception : " + str(e))
 
   else: 
@@ -483,8 +505,7 @@ if __name__ == '__main__':
       help="Host name/IP of the vSphere. Default: '127.0.0.1'")
  parser.add_argument("-vSphereuser", default=os.getenv('vSphere_USER', 'administrator@vsphere.local'),
                      help="User name to login vSphere. Default: 'administrator@vsphere.local'")
- parser.add_argument("-password", default=os.getenv('PASSWORD', 'Mcts@1234'),
-                     help="Password to login vSphere. Default: 'Mcts@1234'")
+ parser.add_argument("-password", help="Password to login vSphere. Default: 'Mcts@1234'")
  parser.add_argument("-port", default=os.getenv('PORT', '443'),
                      help="Port to login vSphere. Default: '443'")
  parser.add_argument("-ssl_verify", default=os.getenv('SSL_VERIFY', '0'),
@@ -534,6 +555,7 @@ if __name__ == '__main__':
 
  service_instance = connectvSphere()
  if not service_instance:
+  # print("vSphere Authentication Failed")
   logging.critical(namespace.jobname + " vSphere connnecion Failed, unable to continue the Job.")
   exit()
   
