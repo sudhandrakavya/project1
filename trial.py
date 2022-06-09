@@ -147,6 +147,7 @@ def write_to_csv(vSpheredata,vSphereheaders):
     fc = csv.DictWriter(output_file,fieldnames=vSphereheaders.keys(),)
     fc.writeheader()
     fc.writerows(vSpheredata)
+    print("Exported Successfully")
  except Exception as e:
   logging.critical(namespace.jobname + " Unable to write data to output file, Export Failed. Exception : " + str(e))
   exit()
