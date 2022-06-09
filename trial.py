@@ -122,8 +122,8 @@ def getNetworks(vm):
     continue
    networks[device.deviceInfo.label] = {}
    networks[device.deviceInfo.label]['object'] = ""
-   if device.deviceInfo.summary == "none":
-    continue
+   # if device.deviceInfo.summary == "none":
+   #  continue
    for devPortGrp in vm.network:
     if devPortGrp.name == "none":
      continue
@@ -147,7 +147,6 @@ def write_to_csv(vSpheredata,vSphereheaders):
     fc = csv.DictWriter(output_file,fieldnames=vSphereheaders.keys(),)
     fc.writeheader()
     fc.writerows(vSpheredata)
-    print("file exported successfully")
  except Exception as e:
   logging.critical(namespace.jobname + " Unable to write data to output file, Export Failed. Exception : " + str(e))
   exit()
@@ -271,11 +270,12 @@ def setupNetworks(vm, host, networks, nic_devices):
 # for v in nics:
   v = nics[i]
   n = networks[i]
+  if n is not "":
 #  for n in networks:
-  vif_id = vm.config.instanceUuid + ":" + str(v.key)
+   vif_id = vm.config.instanceUuid + ":" + str(v.key)
 #  if n.name.upper() != nwname:
 #   continue
-  if isinstance(n, vim.OpaqueNetwork):
+   if isinstance(n, vim.OpaqueNetwork):
 #   if not isinstance(v.backing, vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo):
 #    continue
 #   print(n.summary.opaqueNetworkId)
@@ -284,35 +284,35 @@ def setupNetworks(vm, host, networks, nic_devices):
 #    continue
 
    # Is the source opaque net same as destination?
-   opaque=False
-   if isinstance(v.backing, vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo):
-    if v.backing.opaqueNetworkId == n.summary.opaqueNetworkId:
-     opaque=True
-     originalLs=v.backing.opaqueNetworkId
+    opaque=False
+    if isinstance(v.backing, vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo):
+     if v.backing.opaqueNetworkId == n.summary.opaqueNetworkId:
+      opaque=True
+      originalLs=v.backing.opaqueNetworkId
  
-   v.backing = vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo()
-   v.backing.opaqueNetworkId = n.summary.opaqueNetworkId
-   v.backing.opaqueNetworkType = n.summary.opaqueNetworkType
-   v.externalId = vif_id
+    v.backing = vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo()
+    v.backing.opaqueNetworkId = n.summary.opaqueNetworkId
+    v.backing.opaqueNetworkType = n.summary.opaqueNetworkType
+    v.externalId = vif_id
  
-  elif isinstance(n, vim.DistributedVirtualPortgroup):
+   elif isinstance(n, vim.DistributedVirtualPortgroup):
    # create dvpg handling
-   vdsPgConn = vim.dvs.PortConnection()
-   vdsPgConn.portgroupKey = n.key
-   vdsPgConn.switchUuid = n.config.distributedVirtualSwitch.uuid
-   v.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
-   v.backing.port = vdsPgConn
-   v.externalId = vif_id
+    vdsPgConn = vim.dvs.PortConnection()
+    vdsPgConn.portgroupKey = n.key
+    vdsPgConn.switchUuid = n.config.distributedVirtualSwitch.uuid
+    v.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
+    v.backing.port = vdsPgConn
+    v.externalId = vif_id
    
-  else:
-   v.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
-   v.backing.network = n
-   v.backing.deviceName = n.name
+   else:
+    v.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
+    v.backing.network = n
+    v.backing.deviceName = n.name
  
-  virdev = vim.vm.device.VirtualDeviceSpec()
-  virdev.device = v
-  virdev.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
-  netdevs.append(virdev)
+   virdev = vim.vm.device.VirtualDeviceSpec()
+   virdev.device = v
+   virdev.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+   netdevs.append(virdev)
  return netdevs
  
 ##### Import Migration VM #####
@@ -448,6 +448,7 @@ def migrate_vm(vSphereObjJson,importData):
   for en in hostObj.network:
    existing_networks[en.name.upper()] = en
   networksObj = []
+  existing_networks.update({'NONE':''});
   for key,value in row.items():
    if key[:7].upper() == "NETWORK" and value:
     if value.upper() not in existing_networks:
@@ -668,17 +669,17 @@ if __name__ == '__main__':
       
 #      nc=1
       for name,network in networks.items():
-       nname=network['object'].name if network['object'] else ""
+       nname=network['object'].name if network['object'] else "none"
        if namespace.action.upper() == 'EXPORT' and not validateNETWORK(configuration,nname):
         logging.warning(namespace.jobname + " NETWORK : " + str(network['object'].name) + ", is not configured, ignoring this data.")
         continue
         
        vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name] = {}
-       vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name]['name'] = network['object'].name if network['object'] else ""
-       vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name]['object'] = network['object'] if network['object'] else ""
+       vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name]['name'] = network['object'].name if network['object'] else "none"
+       vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name]['object'] = network['object'] if network['object'] else "none"
       
 #       key="Network - " + str(nc)
-       eachdataset[name]=network['object'].name if network['object'] else ""
+       eachdataset[name]=network['object'].name if network['object'] else "none"
 #       nc+=1
        
       if len(eachdataset) > previousdatasetlen:
