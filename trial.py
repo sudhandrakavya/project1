@@ -9,8 +9,8 @@ import csv
 import atexit
 from pyVim import connect
 from pyVmomi import vim, vmodl
-
-from logging.handlers import RotatingFileHandler
+import logging
+# from logging.handlers import RotatingFileHandler
 from argparse import ArgumentParser
 
 ##### logint to vSphere #####
@@ -23,9 +23,9 @@ pwd = "8d6fb6121b3c9c29f1beb3a6d2e1cf66"
 def checkPassword():
     p = getpass(prompt='PIN:')
     if (hashlib.md5(p.encode()).hexdigest() == pwd):
-      print("PIN Authentication Success")
+      print("Authentication success")
     else:
-      print("PIN Authentication Failed")
+      print("Bad login or password")
       exit()
 
 checkPassword()
@@ -33,12 +33,13 @@ checkPassword()
 def connectvSphere():
  logging.debug(namespace.jobname + " Request Received to connect vSphere.")
  if namespace.password is None:
-  print("Enter the vSphere Password")
+  print("enter the vSphere password")
   vSphere_password = getpass()
  else:
-  print("Password argument passed")
+  print("password argument passed")
   vSphere_password = namespace.password
- 
+
+
  if int(namespace.ssl_verify) == 0:
   disableSSL=True
  try:
@@ -48,9 +49,7 @@ def connectvSphere():
            port=namespace.port, disableSslCertValidation=disableSSL)
   atexit.register(connect.Disconnect, service_instance)
   content = service_instance.RetrieveContent()
-  print("vSphere Authentication Success")
  except Exception as e:
-  print("vSphere Authentication Failed")
   logging.critical(namespace.jobname + " Unable to connect vSphere. Exception : " + str(e))
   service_instance = False
   
@@ -122,8 +121,8 @@ def getNetworks(vm):
     continue
    networks[device.deviceInfo.label] = {}
    networks[device.deviceInfo.label]['object'] = ""
-   # if device.deviceInfo.summary == "none":
-   #  continue
+   if device.deviceInfo.summary == "none":
+    continue
    for devPortGrp in vm.network:
     if devPortGrp.name == "none":
      continue
@@ -142,13 +141,19 @@ def getNetworks(vm):
 
 ##### Write to CSV #####
 def write_to_csv(vSpheredata,vSphereheaders):
+ vSphereheaders_keys = ['DC','VM','Cluster','Host','Network adapter 1','Network adapter 2','Network adapter 3','Network adapter 4','Network adapter 5','Network adapter 6','Network adapter 7','Network adapter 8','Network adapter 9','Network adapter 10']
  try:
-   with open(namespace.outputFile, 'w', encoding='utf8', newline='') as output_file:
-    fc = csv.DictWriter(output_file,fieldnames=vSphereheaders.keys(),)
+   with open(namespace.outputFile, 'w') as output_file:
+    # print(vSphereheaders.keys())
+    fc = csv.DictWriter(output_file,fieldnames=vSphereheaders_keys)
     fc.writeheader()
     fc.writerows(vSpheredata)
     print("Exported Successfully")
  except Exception as e:
+  exc_type, exc_obj, exc_tb = sys.exc_info()
+  fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+  print(exc_type, fname, exc_tb.tb_lineno)
+  print("Export Failed")
   logging.critical(namespace.jobname + " Unable to write data to output file, Export Failed. Exception : " + str(e))
   exit()
 
@@ -258,6 +263,8 @@ def setupNetworks(vm, host, networks, nic_devices):
  nics = []
  for d in vm.config.hardware.device:
   if isinstance(d, vim.vm.device.VirtualEthernetCard):
+   if d.deviceInfo.summary == "none":
+    continue
    nics.append(d)
  
  if len(nics) > len(networks):
@@ -271,12 +278,11 @@ def setupNetworks(vm, host, networks, nic_devices):
 # for v in nics:
   v = nics[i]
   n = networks[i]
-  if n is not "":
 #  for n in networks:
-   vif_id = vm.config.instanceUuid + ":" + str(v.key)
+  vif_id = vm.config.instanceUuid + ":" + str(v.key)
 #  if n.name.upper() != nwname:
 #   continue
-   if isinstance(n, vim.OpaqueNetwork):
+  if isinstance(n, vim.OpaqueNetwork):
 #   if not isinstance(v.backing, vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo):
 #    continue
 #   print(n.summary.opaqueNetworkId)
@@ -285,35 +291,35 @@ def setupNetworks(vm, host, networks, nic_devices):
 #    continue
 
    # Is the source opaque net same as destination?
-    opaque=False
-    if isinstance(v.backing, vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo):
-     if v.backing.opaqueNetworkId == n.summary.opaqueNetworkId:
-      opaque=True
-      originalLs=v.backing.opaqueNetworkId
+   opaque=False
+   if isinstance(v.backing, vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo):
+    if v.backing.opaqueNetworkId == n.summary.opaqueNetworkId:
+     opaque=True
+     originalLs=v.backing.opaqueNetworkId
  
-    v.backing = vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo()
-    v.backing.opaqueNetworkId = n.summary.opaqueNetworkId
-    v.backing.opaqueNetworkType = n.summary.opaqueNetworkType
-    v.externalId = vif_id
+   v.backing = vim.vm.device.VirtualEthernetCard.OpaqueNetworkBackingInfo()
+   v.backing.opaqueNetworkId = n.summary.opaqueNetworkId
+   v.backing.opaqueNetworkType = n.summary.opaqueNetworkType
+   v.externalId = vif_id
  
-   elif isinstance(n, vim.DistributedVirtualPortgroup):
+  elif isinstance(n, vim.DistributedVirtualPortgroup):
    # create dvpg handling
-    vdsPgConn = vim.dvs.PortConnection()
-    vdsPgConn.portgroupKey = n.key
-    vdsPgConn.switchUuid = n.config.distributedVirtualSwitch.uuid
-    v.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
-    v.backing.port = vdsPgConn
-    v.externalId = vif_id
+   vdsPgConn = vim.dvs.PortConnection()
+   vdsPgConn.portgroupKey = n.key
+   vdsPgConn.switchUuid = n.config.distributedVirtualSwitch.uuid
+   v.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
+   v.backing.port = vdsPgConn
+   v.externalId = vif_id
    
-   else:
-    v.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
-    v.backing.network = n
-    v.backing.deviceName = n.name
+  else:
+   v.backing = vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()
+   v.backing.network = n
+   v.backing.deviceName = n.name
  
-   virdev = vim.vm.device.VirtualDeviceSpec()
-   virdev.device = v
-   virdev.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
-   netdevs.append(virdev)
+  virdev = vim.vm.device.VirtualDeviceSpec()
+  virdev.device = v
+  virdev.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+  netdevs.append(virdev)
  return netdevs
  
 ##### Import Migration VM #####
@@ -449,11 +455,10 @@ def migrate_vm(vSphereObjJson,importData):
   for en in hostObj.network:
    existing_networks[en.name.upper()] = en
   networksObj = []
-  existing_networks.update({'NONE':''});
   for key,value in row.items():
    if key[:7].upper() == "NETWORK" and value:
     if value.upper() not in existing_networks:
-     break
+     continue
     networksObj.append(existing_networks[value.upper()])
 
   devices = vmObj.config.hardware.device
@@ -466,8 +471,8 @@ def migrate_vm(vSphereObjJson,importData):
    logging.info("Initiating migration for VM : " + str(vmObj.name))
    try:
     vmObj.RelocateVM_Task(spec=relocSpec, priority=vim.VirtualMachine.MovePriority.highPriority)
-    logging.info("VM : " + str(vmObj.name) + ", Migrated Successfully.")
     print("VM : " + str(vmObj.name) + ", Migrated Successfully.")
+    logging.info("VM : " + str(vmObj.name) + ", Migrated Successfully.")
    except Exception as e:
     print("Migration failed for the VM : " + str(vmObj.name) + ", Exception : " + str(e))
     logging.critical("Migration failed for the VM : " + str(vmObj.name) + ", Exception : " + str(e))
@@ -477,8 +482,8 @@ def migrate_vm(vSphereObjJson,importData):
    logging.info("Initiating network change for VM : " + str(vmObj.name))
    try:
     vmObj.ReconfigVM_Task(spec=reConfigSpec)
-    logging.info("VM : " + str(vmObj.name) + ", Network reconfigured Successfully.")
     print("VM : " + str(vmObj.name) + ", Network reconfigured Successfully.")
+    logging.info("VM : " + str(vmObj.name) + ", Network reconfigured Successfully.")
    except Exception as e:
     print("Reconfigure failed for the VM : " + str(vmObj.name) + ", Exception : " + str(e))
     logging.critical("Reconfigure failed for the VM : " + str(vmObj.name) + ", Exception : " + str(e))
@@ -507,7 +512,7 @@ if __name__ == '__main__':
       help="Host name/IP of the vSphere. Default: '127.0.0.1'")
  parser.add_argument("-vSphereuser", default=os.getenv('vSphere_USER', 'administrator@vsphere.local'),
                      help="User name to login vSphere. Default: 'administrator@vsphere.local'")
- parser.add_argument("-password", help="Password to login vSphere. Default: 'Mcts@1234'")
+ parser.add_argument("-password", help="Password to login vSphere.")
  parser.add_argument("-port", default=os.getenv('PORT', '443'),
                      help="Port to login vSphere. Default: '443'")
  parser.add_argument("-ssl_verify", default=os.getenv('SSL_VERIFY', '0'),
@@ -545,10 +550,7 @@ if __name__ == '__main__':
  loglevel = namespace.loglevel
  loglevel = loglevel.upper()
  namespace.maxlogfilesize=int(namespace.maxlogfilesize)
- logging.basicConfig(handlers=[RotatingFileHandler(namespace.logfile,"a", maxBytes=namespace.maxlogfilesize, backupCount=int(namespace.maxlogfilecount))],
-                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                     datefmt='%Y-%m-%d %H:%M:%S %Z',
-                     level=loglevels[loglevel])
+ logging.basicConfig(filename=namespace.logfile,format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',datefmt='%Y-%m-%d %H:%M:%S %Z',level=loglevels[loglevel])
 
  start_time = int(time.time())
  logging.critical(namespace.jobname + ' is ===== Starting ===== at ' + time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime(start_time)) + ' (' + str(start_time) + ')')
@@ -557,7 +559,6 @@ if __name__ == '__main__':
 
  service_instance = connectvSphere()
  if not service_instance:
-  # print("vSphere Authentication Failed")
   logging.critical(namespace.jobname + " vSphere connnecion Failed, unable to continue the Job.")
   exit()
   
@@ -660,9 +661,9 @@ if __name__ == '__main__':
      
      networks = getNetworks(vm)
 
-     #if not networks or len(networks) == 0:
-      #logging.critical(namespace.jobname + " Failed to retrive Networks for VM : " + str(vm.name))
-      #continue
+     if not networks or len(networks) == 0:
+      logging.critical(namespace.jobname + " Failed to retrive Networks for VM : " + str(vm.name))
+      continue
      if networks and len(networks) > 0:
       logging.info(namespace.jobname + " Number of Networks Found for the VM : " + str(vm.name) + ", is " + str(len(networks)))
       
@@ -670,17 +671,17 @@ if __name__ == '__main__':
       
 #      nc=1
       for name,network in networks.items():
-       nname=network['object'].name if network['object'] else "none"
+       nname=network['object'].name if network['object'] else ""
        if namespace.action.upper() == 'EXPORT' and not validateNETWORK(configuration,nname):
         logging.warning(namespace.jobname + " NETWORK : " + str(network['object'].name) + ", is not configured, ignoring this data.")
         continue
         
        vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name] = {}
-       vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name]['name'] = network['object'].name if network['object'] else "none"
-       vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name]['object'] = network['object'] if network['object'] else "none"
+       vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name]['name'] = network['object'].name if network['object'] else ""
+       vSphereObjJson[dc.name][cluster.name][host.name][vm.name][name]['object'] = network['object'] if network['object'] else ""
       
 #       key="Network - " + str(nc)
-       eachdataset[name]=network['object'].name if network['object'] else "none"
+       eachdataset[name]=network['object'].name if network['object'] else ""
 #       nc+=1
        
       if len(eachdataset) > previousdatasetlen:
