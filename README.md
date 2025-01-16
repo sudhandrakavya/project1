@@ -8,4 +8,4 @@ python3 automation_script_git.py -action=import/export -type=reconfig/relocate
 
 remove the file location hardcoding in the arguments
 
-#my
+This is trial sentence
